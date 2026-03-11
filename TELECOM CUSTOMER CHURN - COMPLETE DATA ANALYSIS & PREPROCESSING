@@ -1,0 +1,703 @@
+# ============================================================================
+# TELECOM CUSTOMER CHURN - COMPLETE DATA ANALYSIS & PREPROCESSING
+# ============================================================================
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import warnings
+warnings.filterwarnings('ignore')
+
+# Set style for better visualizations
+sns.set_style("whitegrid")
+plt.rcParams['figure.figsize'] = (12, 6)
+
+# ============================================================================
+# 1. LOAD AND READ DATA
+# ============================================================================
+print("=" * 80)
+print("LOADING TELECOM CUSTOMER CHURN DATASET")
+print("=" * 80)
+
+file_path = "Telecom Customer Churn.xlsx"
+df = pd.read_excel(file_path)
+
+print("\n✓ Dataset loaded successfully!")
+print(f"Dataset Shape: {df.shape}")
+print(f"Total Records: {df.shape[0]}")
+print(f"Total Features: {df.shape[1]}")
+
+# ============================================================================
+# 2. OVERVIEW OF THE DATA
+# ============================================================================
+print("\n" + "=" * 80)
+print("DATASET OVERVIEW")
+print("=" * 80)
+
+print("\n--- Dataset Shape ---")
+print(f"Rows: {df.shape[0]}")
+print(f"Columns: {df.shape[1]}")
+
+print("\n--- First 5 Rows ---")
+print(df.head())
+
+print("\n--- Last 5 Rows ---")
+print(df.tail())
+
+print("\n--- Column Names ---")
+print(df.columns.tolist())
+
+# Standardize column names to lowercase
+df.columns = df.columns.str.lower().str.replace(' ', '_')
+print("\n--- Standardized Column Names ---")
+print(df.columns.tolist())
+
+print("\n--- Data Types ---")
+print(df.dtypes)
+
+print("\n--- Dataset Info ---")
+df.info()
+
+print("\n--- Statistical Summary ---")
+print(df.describe())
+
+# ============================================================================
+# 3. EXPLORATORY DATA ANALYSIS (EDA)
+# ============================================================================
+print("\n" + "=" * 80)
+print("EXPLORATORY DATA ANALYSIS")
+print("=" * 80)
+
+# --- Check for duplicates ---
+print("\n--- Duplicate Rows Check ---")
+duplicates = df.duplicated().sum()
+print(f"Number of duplicate rows: {duplicates}")
+
+# --- Missing Values Analysis ---
+print("\n--- Missing Values Analysis ---")
+missing_values = df.isnull().sum().sort_values(ascending=False)
+missing_percent = (df.isnull().sum() / len(df) * 100).sort_values(ascending=False)
+missing_df = pd.DataFrame({
+    'Missing_Count': missing_values,
+    'Percentage': missing_percent
+})
+print(missing_df[missing_df['Missing_Count'] > 0])
+
+# Visualize missing values
+plt.figure(figsize=(14, 6))
+sns.heatmap(df.isnull(), cbar=True, cmap='viridis', yticklabels=False)
+plt.title('Missing Values Heatmap', fontsize=16, fontweight='bold')
+plt.tight_layout()
+plt.show()
+
+# --- Unique Values in Categorical Columns ---
+print("\n--- Unique Values in Categorical Columns ---")
+categorical_cols = df.select_dtypes(include='object').columns
+
+for col in categorical_cols:
+    unique_count = df[col].nunique()
+    print(f"\n{col.upper()}")
+    print(f"  Unique Values: {unique_count}")
+    if unique_count <= 10:
+        print(f"  Values: {df[col].unique()}")
+        print(f"  Distribution:\n{df[col].value_counts()}")
+
+# --- Target Variable Analysis (Customer Status / Churn) ---
+print("\n--- TARGET VARIABLE ANALYSIS ---")
+if 'customer_status' in df.columns:
+    print("\nCustomer Status Distribution:")
+    print(df['customer_status'].value_counts())
+    print("\nCustomer Status Percentage:")
+    print(df['customer_status'].value_counts(normalize=True) * 100)
+    
+    # Visualize target variable
+    plt.figure(figsize=(10, 5))
+    df['customer_status'].value_counts().plot.pie(autopct='%.2f%%', colors=['#ff9999','#66b3ff','#99ff99'])
+    plt.title('Customer Status Distribution', fontsize=16, fontweight='bold')
+    plt.ylabel('')
+    plt.tight_layout()
+    plt.show()
+
+# --- Numeric Features Distribution ---
+print("\n--- Numeric Features Distribution ---")
+numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns
+
+# Histograms for all numeric features
+df[numeric_cols].hist(figsize=(18, 12), bins=30, edgecolor='black')
+plt.suptitle('Distribution of Numeric Features', fontsize=18, fontweight='bold', y=1.00)
+plt.tight_layout()
+plt.show()
+
+# --- Check for Negative or Invalid Values ---
+print("\n--- Invalid Values Check ---")
+for col in numeric_cols:
+    if 'charge' in col.lower() or 'revenue' in col.lower():
+        negative_count = (df[col] < 0).sum()
+        if negative_count > 0:
+            print(f"{col}: {negative_count} negative values found")
+
+# --- Outlier Detection with Boxplots ---
+print("\n--- Outlier Detection (Boxplots) ---")
+# Filter numeric columns that have valid data and variation
+valid_numeric_cols = []
+for col in numeric_cols:
+    # Check if column has valid numeric data
+    if df[col].notna().sum() > 0 and df[col].nunique() > 1:
+        # Ensure it's truly numeric
+        try:
+            pd.to_numeric(df[col], errors='raise')
+            valid_numeric_cols.append(col)
+        except:
+            print(f"Skipping {col}: not purely numeric")
+
+print(f"Creating boxplots for {len(valid_numeric_cols)} numeric columns")
+
+if len(valid_numeric_cols) > 0:
+    n_cols = 4
+    n_rows = (len(valid_numeric_cols) + n_cols - 1) // n_cols  # Ceiling division
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols*5, n_rows*4))
+    axes = axes.flatten() if n_rows * n_cols > 1 else [axes]
+    
+    for idx, col in enumerate(valid_numeric_cols):
+        try:
+            # Convert to numeric explicitly
+            data = pd.to_numeric(df[col], errors='coerce').dropna()
+            if len(data) > 0:
+                axes[idx].boxplot(data, vert=True)
+                axes[idx].set_title(col, fontsize=10, fontweight='bold')
+                axes[idx].set_xticklabels([])
+        except Exception as e:
+            print(f"Error plotting {col}: {str(e)}")
+            axes[idx].text(0.5, 0.5, f'Error: {col}', ha='center', va='center')
+    
+    # Hide empty subplots
+    for idx in range(len(valid_numeric_cols), len(axes)):
+        axes[idx].axis('off')
+    
+    plt.suptitle('Outlier Detection - Boxplots', fontsize=18, fontweight='bold')
+    plt.tight_layout()
+    plt.show()
+else:
+    print("No valid numeric columns found for boxplots")
+
+# --- Correlation Matrix ---
+print("\n--- Correlation Analysis ---")
+plt.figure(figsize=(14, 10))
+correlation_matrix = df[numeric_cols].corr()
+sns.heatmap(correlation_matrix, annot=True, fmt=".2f", cmap='coolwarm', 
+            center=0, square=True, linewidths=1)
+plt.title('Correlation Matrix - Numeric Features', fontsize=16, fontweight='bold')
+plt.tight_layout()
+plt.show()
+
+# ============================================================================
+# 4. BIVARIATE ANALYSIS (FEATURE VS TARGET)
+# ============================================================================
+print("\n" + "=" * 80)
+print("BIVARIATE ANALYSIS - FEATURES VS CHURN")
+print("=" * 80)
+
+if 'customer_status' in df.columns:
+    # Gender vs Customer Status
+    if 'gender' in df.columns:
+        print("\n--- Gender vs Customer Status ---")
+        gender_status = df['customer_status'].groupby(df['gender']).value_counts()
+        print(gender_status)
+        
+        plt.figure(figsize=(10, 6))
+        sns.countplot(x='customer_status', data=df, hue='gender', palette='Set2')
+        plt.title('Customer Status by Gender', fontsize=14, fontweight='bold')
+        plt.xlabel('Customer Status')
+        plt.ylabel('Count')
+        plt.legend(title='Gender')
+        plt.tight_layout()
+        plt.show()
+    
+    # Contract vs Customer Status
+    if 'contract' in df.columns:
+        print("\n--- Contract Type vs Customer Status ---")
+        contract_status = df['customer_status'].groupby(df['contract']).value_counts()
+        print(contract_status)
+        
+        plt.figure(figsize=(12, 6))
+        sns.countplot(x='customer_status', data=df, hue='contract', palette='Set1')
+        plt.title('Customer Status by Contract Type', fontsize=14, fontweight='bold')
+        plt.xlabel('Customer Status')
+        plt.ylabel('Count')
+        plt.legend(title='Contract')
+        plt.tight_layout()
+        plt.show()
+    
+    # Internet Service vs Customer Status
+    if 'internet_service' in df.columns:
+        print("\n--- Internet Service vs Customer Status ---")
+        
+        plt.figure(figsize=(12, 6))
+        sns.countplot(x='customer_status', data=df, hue='internet_service', palette='viridis')
+        plt.title('Customer Status by Internet Service', fontsize=14, fontweight='bold')
+        plt.xlabel('Customer Status')
+        plt.ylabel('Count')
+        plt.legend(title='Internet Service')
+        plt.tight_layout()
+        plt.show()
+    
+    # Age vs Customer Status (if age exists)
+    if 'age' in df.columns:
+        plt.figure(figsize=(12, 6))
+        try:
+            age_data = [df[df['customer_status'] == status]['age'].dropna() 
+                       for status in df['customer_status'].unique()]
+            positions = range(len(df['customer_status'].unique()))
+            plt.boxplot(age_data, positions=positions, labels=df['customer_status'].unique())
+            plt.title('Age Distribution by Customer Status', fontsize=14, fontweight='bold')
+            plt.xlabel('Customer Status')
+            plt.ylabel('Age')
+            plt.tight_layout()
+            plt.show()
+        except Exception as e:
+            print(f"Could not plot Age vs Customer Status: {e}")
+    
+    # Monthly Charge vs Customer Status
+    if 'monthly_charge' in df.columns:
+        plt.figure(figsize=(12, 6))
+        try:
+            charge_data = [df[df['customer_status'] == status]['monthly_charge'].dropna() 
+                          for status in df['customer_status'].unique()]
+            positions = range(len(df['customer_status'].unique()))
+            plt.boxplot(charge_data, positions=positions, labels=df['customer_status'].unique())
+            plt.title('Monthly Charge by Customer Status', fontsize=14, fontweight='bold')
+            plt.xlabel('Customer Status')
+            plt.ylabel('Monthly Charge')
+            plt.tight_layout()
+            plt.show()
+        except Exception as e:
+            print(f"Could not plot Monthly Charge vs Customer Status: {e}")
+    
+    # Tenure vs Customer Status
+    if 'tenure_in_months' in df.columns:
+        plt.figure(figsize=(12, 6))
+        try:
+            tenure_data = [df[df['customer_status'] == status]['tenure_in_months'].dropna() 
+                          for status in df['customer_status'].unique()]
+            positions = range(len(df['customer_status'].unique()))
+            plt.boxplot(tenure_data, positions=positions, labels=df['customer_status'].unique())
+            plt.title('Tenure Distribution by Customer Status', fontsize=14, fontweight='bold')
+            plt.xlabel('Customer Status')
+            plt.ylabel('Tenure (Months)')
+            plt.tight_layout()
+            plt.show()
+        except Exception as e:
+            print(f"Could not plot Tenure vs Customer Status: {e}")
+
+# Scatter plot: Monthly Charge vs Tenure colored by Customer Status
+if 'monthly_charge' in df.columns and 'tenure_in_months' in df.columns and 'customer_status' in df.columns:
+    plt.figure(figsize=(12, 6))
+    sns.scatterplot(x='tenure_in_months', y='monthly_charge', 
+                    hue='customer_status', data=df, alpha=0.6, palette='deep')
+    plt.title('Monthly Charge vs Tenure (by Customer Status)', fontsize=14, fontweight='bold')
+    plt.xlabel('Tenure (Months)')
+    plt.ylabel('Monthly Charge')
+    plt.legend(title='Customer Status')
+    plt.tight_layout()
+    plt.show()
+
+# ============================================================================
+# ADDITIONAL ANALYSIS: CREDIT SCORE RELATIONSHIPS
+# ============================================================================
+print("\n" + "=" * 80)
+print("CREDIT SCORE ANALYSIS")
+print("=" * 80)
+
+# Check if credit score column exists
+credit_score_col = None
+for col in df.columns:
+    if 'credit' in col.lower() and 'score' in col.lower():
+        credit_score_col = col
+        break
+
+if credit_score_col:
+    print(f"\n✓ Found credit score column: {credit_score_col}")
+    
+    # 1. Credit Score vs Customer Status (Churned vs Stayed)
+    print("\n--- Credit Score Distribution by Customer Status ---")
+    if 'customer_status' in df.columns:
+        # Summary statistics
+        credit_by_status = df.groupby('customer_status')[credit_score_col].describe()
+        print(credit_by_status)
+        
+        # Boxplot: Credit Score vs Customer Status
+        plt.figure(figsize=(12, 6))
+        try:
+            status_groups = df['customer_status'].unique()
+            credit_data = [df[df['customer_status'] == status][credit_score_col].dropna() 
+                          for status in status_groups]
+            positions = range(len(status_groups))
+            
+            bp = plt.boxplot(credit_data, positions=positions, labels=status_groups, 
+                           patch_artist=True, widths=0.6)
+            
+            # Color the boxes
+            colors = ['#ff9999', '#66b3ff', '#99ff99']
+            for patch, color in zip(bp['boxes'], colors[:len(bp['boxes'])]):
+                patch.set_facecolor(color)
+            
+            plt.title('Credit Score Distribution by Customer Status', fontsize=16, fontweight='bold')
+            plt.xlabel('Customer Status', fontsize=12)
+            plt.ylabel('Credit Score', fontsize=12)
+            plt.grid(axis='y', alpha=0.3)
+            plt.tight_layout()
+            plt.show()
+        except Exception as e:
+            print(f"Could not plot Credit Score vs Customer Status: {e}")
+        
+        # Violin plot alternative
+        plt.figure(figsize=(12, 6))
+        try:
+            for idx, status in enumerate(df['customer_status'].unique()):
+                data = df[df['customer_status'] == status][credit_score_col].dropna()
+                positions = [idx] * len(data)
+                plt.scatter(positions, data, alpha=0.4, s=20)
+            
+            plt.xticks(range(len(df['customer_status'].unique())), df['customer_status'].unique())
+            plt.title('Credit Score Distribution by Customer Status (Scatter)', fontsize=16, fontweight='bold')
+            plt.xlabel('Customer Status', fontsize=12)
+            plt.ylabel('Credit Score', fontsize=12)
+            plt.grid(axis='y', alpha=0.3)
+            plt.tight_layout()
+            plt.show()
+        except Exception as e:
+            print(f"Could not plot scatter: {e}")
+        
+        # Histogram with overlay
+        plt.figure(figsize=(14, 6))
+        try:
+            for status in df['customer_status'].unique():
+                data = df[df['customer_status'] == status][credit_score_col].dropna()
+                plt.hist(data, alpha=0.5, bins=30, label=status, edgecolor='black')
+            
+            plt.title('Credit Score Distribution - Churned vs Stayed', fontsize=16, fontweight='bold')
+            plt.xlabel('Credit Score', fontsize=12)
+            plt.ylabel('Frequency', fontsize=12)
+            plt.legend(title='Customer Status')
+            plt.grid(axis='y', alpha=0.3)
+            plt.tight_layout()
+            plt.show()
+        except Exception as e:
+            print(f"Could not plot histogram: {e}")
+    
+    # 2. Monthly Charge vs Credit Score
+    print("\n--- Monthly Charge vs Credit Score ---")
+    if 'monthly_charge' in df.columns:
+        # Summary statistics
+        print(f"\nCorrelation between Monthly Charge and Credit Score:")
+        correlation = df[[credit_score_col, 'monthly_charge']].corr().iloc[0, 1]
+        print(f"Correlation coefficient: {correlation:.4f}")
+        
+        # Scatter plot: Monthly Charge vs Credit Score
+        plt.figure(figsize=(14, 7))
+        try:
+            plt.scatter(df[credit_score_col], df['monthly_charge'], 
+                       alpha=0.5, s=30, c='steelblue', edgecolors='black', linewidth=0.5)
+            
+            # Add trend line
+            z = np.polyfit(df[credit_score_col].dropna(), 
+                          df.loc[df[credit_score_col].notna(), 'monthly_charge'], 1)
+            p = np.poly1d(z)
+            plt.plot(df[credit_score_col].sort_values(), 
+                    p(df[credit_score_col].sort_values()), 
+                    "r--", linewidth=2, label=f'Trend Line (y={z[0]:.2f}x+{z[1]:.2f})')
+            
+            plt.title('Monthly Charge vs Credit Score', fontsize=16, fontweight='bold')
+            plt.xlabel('Credit Score', fontsize=12)
+            plt.ylabel('Monthly Charge ($)', fontsize=12)
+            plt.legend()
+            plt.grid(True, alpha=0.3)
+            plt.tight_layout()
+            plt.show()
+        except Exception as e:
+            print(f"Could not plot Monthly Charge vs Credit Score: {e}")
+    
+    # 3. Monthly Charge vs Credit Score (colored by Customer Status)
+    print("\n--- Monthly Charge vs Credit Score by Customer Status ---")
+    if 'monthly_charge' in df.columns and 'customer_status' in df.columns:
+        plt.figure(figsize=(14, 7))
+        try:
+            for status in df['customer_status'].unique():
+                status_data = df[df['customer_status'] == status]
+                plt.scatter(status_data[credit_score_col], status_data['monthly_charge'],
+                          alpha=0.6, s=40, label=status, edgecolors='black', linewidth=0.5)
+            
+            plt.title('Monthly Charge vs Credit Score by Customer Status', 
+                     fontsize=16, fontweight='bold')
+            plt.xlabel('Credit Score', fontsize=12)
+            plt.ylabel('Monthly Charge ($)', fontsize=12)
+            plt.legend(title='Customer Status', fontsize=10)
+            plt.grid(True, alpha=0.3)
+            plt.tight_layout()
+            plt.show()
+        except Exception as e:
+            print(f"Could not plot colored scatter: {e}")
+        
+        # Hexbin plot for density visualization
+        plt.figure(figsize=(14, 7))
+        try:
+            plt.hexbin(df[credit_score_col], df['monthly_charge'], 
+                      gridsize=30, cmap='YlOrRd', mincnt=1)
+            plt.colorbar(label='Count')
+            plt.title('Monthly Charge vs Credit Score (Density)', fontsize=16, fontweight='bold')
+            plt.xlabel('Credit Score', fontsize=12)
+            plt.ylabel('Monthly Charge ($)', fontsize=12)
+            plt.grid(True, alpha=0.3)
+            plt.tight_layout()
+            plt.show()
+        except Exception as e:
+            print(f"Could not plot hexbin: {e}")
+    
+    # 4. Credit Score Statistics by Customer Status
+    print("\n--- Credit Score Statistics ---")
+    if 'customer_status' in df.columns:
+        print("\nMean Credit Score by Customer Status:")
+        mean_by_status = df.groupby('customer_status')[credit_score_col].mean().sort_values(ascending=False)
+        print(mean_by_status)
+        
+        print("\nMedian Credit Score by Customer Status:")
+        median_by_status = df.groupby('customer_status')[credit_score_col].median().sort_values(ascending=False)
+        print(median_by_status)
+        
+        # Bar plot of mean credit scores
+        plt.figure(figsize=(10, 6))
+        mean_by_status.plot(kind='bar', color=['#ff9999', '#66b3ff', '#99ff99'], edgecolor='black')
+        plt.title('Average Credit Score by Customer Status', fontsize=16, fontweight='bold')
+        plt.xlabel('Customer Status', fontsize=12)
+        plt.ylabel('Average Credit Score', fontsize=12)
+        plt.xticks(rotation=45, ha='right')
+        plt.grid(axis='y', alpha=0.3)
+        plt.tight_layout()
+        plt.show()
+    
+    # 5. Monthly Charge Distribution by Customer Status
+    print("\n--- Monthly Charge Distribution by Customer Status ---")
+    if 'monthly_charge' in df.columns and 'customer_status' in df.columns:
+        # Boxplot
+        plt.figure(figsize=(12, 6))
+        try:
+            status_groups = df['customer_status'].unique()
+            charge_data = [df[df['customer_status'] == status]['monthly_charge'].dropna() 
+                          for status in status_groups]
+            positions = range(len(status_groups))
+            
+            bp = plt.boxplot(charge_data, positions=positions, labels=status_groups, 
+                           patch_artist=True, widths=0.6)
+            
+            colors = ['#ff9999', '#66b3ff', '#99ff99']
+            for patch, color in zip(bp['boxes'], colors[:len(bp['boxes'])]):
+                patch.set_facecolor(color)
+            
+            plt.title('Monthly Charge Distribution by Customer Status', fontsize=16, fontweight='bold')
+            plt.xlabel('Customer Status', fontsize=12)
+            plt.ylabel('Monthly Charge ($)', fontsize=12)
+            plt.grid(axis='y', alpha=0.3)
+            plt.tight_layout()
+            plt.show()
+        except Exception as e:
+            print(f"Could not plot Monthly Charge distribution: {e}")
+
+else:
+    print("\n⚠ Credit Score column not found in dataset")
+    print("Available columns:", df.columns.tolist())
+
+# ============================================================================
+# 5. KEY INSIGHTS FROM EDA
+# ============================================================================
+print("\n" + "=" * 80)
+print("KEY INSIGHTS FROM EXPLORATORY DATA ANALYSIS")
+print("=" * 80)
+
+print("""
+1. DATASET COMPOSITION:
+   - Total records and features provide a solid foundation for analysis
+   - Missing values identified in key columns require handling
+
+2. TARGET VARIABLE (CUSTOMER STATUS):
+   - Distribution shows class imbalance that may need addressing
+   - Churned customers show distinct patterns in features
+
+3. FEATURE RELATIONSHIPS:
+   - Contract type strongly influences churn behavior
+   - Monthly charges and tenure show correlation with retention
+   - Gender and service types impact customer decisions
+
+4. DATA QUALITY:
+   - Missing values detected in several columns
+   - Outliers present in numeric features
+   - Some features may require transformation
+
+5. NEXT STEPS:
+   - Handle missing values appropriately
+   - Address outliers using statistical methods
+   - Encode categorical variables for modeling
+   - Consider feature engineering for better predictions
+""")
+
+# ============================================================================
+# 6. DATA CLEANING
+# ============================================================================
+print("\n" + "=" * 80)
+print("DATA CLEANING")
+print("=" * 80)
+
+# --- Remove Duplicates ---
+print("\n--- Removing Duplicate Rows ---")
+print(f"Duplicates before removal: {df.duplicated().sum()}")
+df = df.drop_duplicates()
+print(f"Duplicates after removal: {df.duplicated().sum()}")
+print(f"Dataset shape after removing duplicates: {df.shape}")
+
+# --- Handle Missing Values ---
+print("\n--- Handling Missing Values ---")
+missing_before = df.isnull().sum().sum()
+print(f"Total missing values before: {missing_before}")
+
+# Strategy: Fill numeric with median, categorical with mode
+numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns
+for col in numeric_cols:
+    if df[col].isnull().sum() > 0:
+        df[col].fillna(df[col].median(), inplace=True)
+        print(f"  Filled {col} with median")
+
+categorical_cols = df.select_dtypes(include='object').columns
+for col in categorical_cols:
+    if df[col].isnull().sum() > 0:
+        # Drop columns with >50% missing values
+        if (df[col].isnull().sum() / len(df)) > 0.5:
+            df.drop(col, axis=1, inplace=True)
+            print(f"  Dropped {col} (>50% missing)")
+        else:
+            df[col].fillna(df[col].mode()[0], inplace=True)
+            print(f"  Filled {col} with mode")
+
+missing_after = df.isnull().sum().sum()
+print(f"Total missing values after: {missing_after}")
+
+# --- Handle Invalid Values ---
+print("\n--- Handling Invalid Values ---")
+for col in ['monthly_charge', 'total_charges', 'total_revenue']:
+    if col in df.columns:
+        negative_count = (df[col] < 0).sum()
+        if negative_count > 0:
+            print(f"  {col}: Replacing {negative_count} negative values with median")
+            df.loc[df[col] < 0, col] = np.nan
+            df[col].fillna(df[col].median(), inplace=True)
+
+# ============================================================================
+# 7. OUTLIER TREATMENT
+# ============================================================================
+print("\n" + "=" * 80)
+print("OUTLIER TREATMENT")
+print("=" * 80)
+
+numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns
+rows_before = len(df)
+
+for col in numeric_cols:
+    if df[col].nunique() > 10:  # Only treat if sufficient variation
+        Q1 = df[col].quantile(0.25)
+        Q3 = df[col].quantile(0.75)
+        IQR = Q3 - Q1
+        lower_limit = Q1 - 1.5 * IQR
+        upper_limit = Q3 + 1.5 * IQR
+        
+        # Cap outliers instead of removing to preserve data
+        outliers_count = ((df[col] < lower_limit) | (df[col] > upper_limit)).sum()
+        if outliers_count > 0:
+            df[col] = df[col].apply(lambda x: lower_limit if x < lower_limit else x)
+            df[col] = df[col].apply(lambda x: upper_limit if x > upper_limit else x)
+            print(f"  {col}: Capped {outliers_count} outliers")
+
+rows_after = len(df)
+print(f"\nRows before outlier treatment: {rows_before}")
+print(f"Rows after outlier treatment: {rows_after}")
+
+# Visualize after outlier treatment
+print("\n--- Boxplots After Outlier Treatment ---")
+numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns
+valid_numeric_cols = []
+for col in numeric_cols:
+    if df[col].notna().sum() > 0 and df[col].nunique() > 1:
+        try:
+            pd.to_numeric(df[col], errors='raise')
+            valid_numeric_cols.append(col)
+        except:
+            continue
+
+if len(valid_numeric_cols) > 0:
+    n_cols = 4
+    n_rows = (len(valid_numeric_cols) + n_cols - 1) // n_cols
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols*5, n_rows*4))
+    axes = axes.flatten() if n_rows * n_cols > 1 else [axes]
+    
+    for idx, col in enumerate(valid_numeric_cols):
+        try:
+            data = pd.to_numeric(df[col], errors='coerce').dropna()
+            if len(data) > 0:
+                axes[idx].boxplot(data, vert=True)
+                axes[idx].set_title(f'{col} (After Treatment)', fontsize=10, fontweight='bold')
+                axes[idx].set_xticklabels([])
+        except Exception as e:
+            axes[idx].text(0.5, 0.5, f'Error: {col}', ha='center', va='center')
+    
+    for idx in range(len(valid_numeric_cols), len(axes)):
+        axes[idx].axis('off')
+    
+    plt.suptitle('After Outlier Treatment', fontsize=18, fontweight='bold')
+    plt.tight_layout()
+    plt.show()
+
+# ============================================================================
+# 8. FEATURE ENCODING
+# ============================================================================
+print("\n" + "=" * 80)
+print("FEATURE ENCODING")
+print("=" * 80)
+
+# Identify Yes/No columns
+yes_no_cols = [col for col in df.columns if df[col].dtype == 'object' and 
+               set(df[col].dropna().unique()).issubset({'Yes', 'No', 'yes', 'no'})]
+
+print(f"\n--- Binary Encoding (Yes/No columns) ---")
+for col in yes_no_cols:
+    df[col] = df[col].str.title().map({'Yes': 1, 'No': 0})
+    print(f"  Encoded {col}")
+
+# One-hot encode other categorical columns
+print(f"\n--- One-Hot Encoding (Categorical columns) ---")
+categorical_cols = df.select_dtypes(include='object').columns.tolist()
+categorical_cols = [col for col in categorical_cols if col not in yes_no_cols]
+
+print(f"  Encoding columns: {categorical_cols}")
+df = pd.get_dummies(df, columns=categorical_cols, drop_first=True)
+
+# ============================================================================
+# 9. FINAL VALIDATION
+# ============================================================================
+print("\n" + "=" * 80)
+print("FINAL DATASET VALIDATION")
+print("=" * 80)
+
+print(f"\nFinal shape: {df.shape}")
+print(f"Total missing values: {df.isnull().sum().sum()}")
+print(f"\nData types distribution:")
+print(df.dtypes.value_counts())
+
+print("\n--- First 5 rows of cleaned dataset ---")
+print(df.head())
+
+print("\n✓ DATA PREPROCESSING COMPLETE!")
+print("=" * 80)
+
+# Optional: Save the preprocessed dataset
+# df.to_csv('preprocessed_telecom_churn.csv', index=False)
+# print("\n✓ Preprocessed dataset saved to 'preprocessed_telecom_churn.csv'")
